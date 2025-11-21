@@ -3,17 +3,38 @@ import os
 import csv
 import io
 from datetime import datetime
+import threading
+
+from fastapi import FastAPI
+import uvicorn
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 # ================== CONFIG ==================
-TOKEN = os.getenv("TOKEN", "YOUR_BOT_TOKEN_HERE")  # Render’da TOKEN env var bo‘ladi
+# Render’da TOKEN env var bo‘ladi
+TOKEN = os.getenv("TOKEN", "YOUR_BOT_TOKEN_HERE")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 ADMINS = [327276782, 7998617969]  # Admin Telegram ID larini shu yerga yoz
+
+# ================== FASTAPI HEALTH CHECK ==================
+
+app = FastAPI()
+
+@app.get("/")
+def alive():
+    return {"status": "AIBOT OK"}
+
+def start_web():
+    """
+    FastAPI serverni alohida thread’da ishga tushiramiz.
+    Render 'PORT' env var beradi, bo‘lmasa 10000 ni olamiz.
+    """
+    port = int(os.getenv("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 # ================== DATA STORES ==================
 
@@ -87,10 +108,18 @@ def log(event: str):
 def main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🌐 Saytga o'tish",
-                                  url="https://stupendous-rolypoly-bf1be5.netlify.app/")],
-            [InlineKeyboardButton(text="📋 Talabalar ro‘yxati", callback_data="royhat")],
-            [InlineKeyboardButton(text="🛠 Admin panel", callback_data="admin_panel")],
+            [InlineKeyboardButton(
+                text="🌐 Saytga o'tish",
+                url="https://stupendous-rolypoly-bf1be5.netlify.app/"
+            )],
+            [InlineKeyboardButton(
+                text="📋 Talabalar ro‘yxati",
+                callback_data="royhat"
+            )],
+            [InlineKeyboardButton(
+                text="🛠 Admin panel",
+                callback_data="admin_panel"
+            )],
         ]
     )
 
@@ -162,12 +191,18 @@ async def student_page(callback: CallbackQuery):
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="💬 Fikr bildirish",
-                                  callback_data=f"action|feedback|{name}")],
-            [InlineKeyboardButton(text="📂 Ishini yuborish",
-                                  callback_data=f"action|work|{name}")],
-            [InlineKeyboardButton(text="⬅️ Ortga (ro‘yxat)",
-                                  callback_data="royhat")],
+            [InlineKeyboardButton(
+                text="💬 Fikr bildirish",
+                callback_data=f"action|feedback|{name}"
+            )],
+            [InlineKeyboardButton(
+                text="📂 Ishini yuborish",
+                callback_data=f"action|work|{name}"
+            )],
+            [InlineKeyboardButton(
+                text="⬅️ Ortga (ro‘yxat)",
+                callback_data="royhat"
+            )],
         ]
     )
 
@@ -222,20 +257,34 @@ async def admin_panel(callback: CallbackQuery):
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📝 Fikrlarni ko‘rish va boshqarish",
-                                  callback_data="admin|view_feedbacks")],
-            [InlineKeyboardButton(text="📂 Ishlarni ko‘rish va boshqarish",
-                                  callback_data="admin|view_works")],
-            [InlineKeyboardButton(text="📊 Statistikalar",
-                                  callback_data="admin|stats")],
-            [InlineKeyboardButton(text="📥 Export CSV",
-                                  callback_data="admin|export")],
-            [InlineKeyboardButton(text="📣 Broadcast / Eslatma yuborish",
-                                  callback_data="admin|broadcast")],
-            [InlineKeyboardButton(text="📜 Logs",
-                                  callback_data="admin|logs")],
-            [InlineKeyboardButton(text="⬅️ Ortga",
-                                  callback_data="back|start")],
+            [InlineKeyboardButton(
+                text="📝 Fikrlarni ko‘rish va boshqarish",
+                callback_data="admin|view_feedbacks"
+            )],
+            [InlineKeyboardButton(
+                text="📂 Ishlarni ko‘rish va boshqarish",
+                callback_data="admin|view_works"
+            )],
+            [InlineKeyboardButton(
+                text="📊 Statistikalar",
+                callback_data="admin|stats"
+            )],
+            [InlineKeyboardButton(
+                text="📥 Export CSV",
+                callback_data="admin|export"
+            )],
+            [InlineKeyboardButton(
+                text="📣 Broadcast / Eslatma yuborish",
+                callback_data="admin|broadcast"
+            )],
+            [InlineKeyboardButton(
+                text="📜 Logs",
+                callback_data="admin|logs"
+            )],
+            [InlineKeyboardButton(
+                text="⬅️ Ortga",
+                callback_data="back|start"
+            )],
         ]
     )
     await callback.message.answer("👑 Admin panel:", reply_markup=kb)
@@ -699,9 +748,12 @@ async def handle_all_messages(message: types.Message):
 # ================== RUN BOT ==================
 
 async def main():
-    print("🤖 Bot ishga tushmoqda...")
+    print("🤖 AIBOT ishga tushmoqda...")
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
+    # FastAPI serverni alohida thread’da ishga tushiramiz
+    threading.Thread(target=start_web, daemon=True).start()
+    # Aiogram pollingni asosiy event loop’da ishlatamiz
     asyncio.run(main())
