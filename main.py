@@ -24,9 +24,22 @@ ADMINS = [327276782, 7998617969]  # Admin Telegram ID larini shu yerga yoz
 
 app = FastAPI()
 
+from fastapi.responses import JSONResponse
+
+# GET so'rovlar uchun
 @app.get("/")
 def alive():
-    return {"status": "AIBOT OK"}
+    return {"status": "AIBOT OK", "ping": True}
+
+# HEAD so'rovlar uchun (UptimeRobot kere)
+@app.head("/")
+def alive_head():
+    return JSONResponse(content={"status": "AIBOT OK"}, status_code=200)
+
+# Qo'shimcha: UptimeRobot ba'zan /ping ga GET yuboradi
+@app.get("/ping")
+def ping():
+    return {"pong": True}
 
 def start_web():
     """
