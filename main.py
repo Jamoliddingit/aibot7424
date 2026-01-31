@@ -123,7 +123,7 @@ def main_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(
                 text="🌐 Saytga o'tish",
-                url="https://stupendous-rolypoly-bf1be5.netlify.app/"
+                url="https://studentlar.netlify.app/"
             )],
             [InlineKeyboardButton(
                 text="📋 Talabalar ro‘yxati",
@@ -770,3 +770,4 @@ if __name__ == "__main__":
     threading.Thread(target=start_web, daemon=True).start()
     # Aiogram pollingni asosiy event loop’da ishlatamiz
     asyncio.run(main())
+
