@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import csv
 import io
@@ -12,13 +13,32 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
+logger = logging.getLogger(__name__)
+
 # ================== CONFIG ==================
-# Render’da TOKEN env var bo‘ladi
-TOKEN = os.getenv("TOKEN", "8053932725:AAFkA02FNOf8Dzo2nvbDt0heKfQEZw5ttG4")
+TOKEN = os.getenv("TOKEN")
+if not TOKEN:
+    raise RuntimeError(
+        "TOKEN environment variable is not set. "
+        "Please set it to your Telegram bot token before starting."
+    )
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-ADMINS = [8460082783]  # Admin Telegram ID larini shu yerga yoz
+_admin_raw = os.getenv("ADMINS", "")
+ADMINS: list[int] = []
+for _id in _admin_raw.split(","):
+    _id = _id.strip()
+    if _id.isdigit():
+        ADMINS.append(int(_id))
+if not ADMINS:
+    logger.warning("ADMINS env var is empty or not set — no admin access will be granted.")
+
+# ================== CONSTANTS ==================
+MAX_INPUT_LENGTH = 4096
+MAX_LOGS = 10000
+MAX_FEEDBACKS = 50000
+MAX_WORKS = 50000
 
 # ================== FASTAPI HEALTH CHECK ==================
 
@@ -47,7 +67,8 @@ def start_web():
     Render 'PORT' env var beradi, bo‘lmasa 10000 ni olamiz.
     """
     port = int(os.getenv("PORT", 10000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    host = os.getenv("HOST", "0.0.0.0")
+    uvicorn.run(app, host=host, port=port)
 
 # ================== DATA STORES ==================
 
@@ -114,6 +135,8 @@ logs: list[tuple[str, str]] = []  # (timestamp, text)
 def log(event: str):
     ts = datetime.now().isoformat(sep=" ", timespec="seconds")
     logs.append((ts, event))
+    if len(logs) > MAX_LOGS:
+        logs[:] = logs[-MAX_LOGS:]
 
 
 # ================== KEYBOARDS ==================
@@ -260,11 +283,15 @@ async def handle_back(callback: CallbackQuery):
     await callback.answer()
 
 
+def _is_admin(user_id: int) -> bool:
+    return user_id in ADMINS
+
+
 # Admin panel
 @dp.callback_query(F.data == "admin_panel")
 async def admin_panel(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id not in ADMINS:
+    if not _is_admin(user_id):
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
 
@@ -319,7 +346,7 @@ async def admin_panel(callback: CallbackQuery):
 )
 async def admin_actions(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id not in ADMINS:
+    if not _is_admin(user_id):
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
 
@@ -539,10 +566,14 @@ async def admin_actions(callback: CallbackQuery):
 @dp.callback_query(F.data.startswith("admin|del_feedback|"))
 async def admin_del_feedback(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id not in ADMINS:
+    if not _is_admin(user_id):
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    fb_id = int(callback.data.split("|")[-1])
+    try:
+        fb_id = int(callback.data.split("|")[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Noto‘g‘ri ma‘lumot.", show_alert=True)
+        return
     for fb in feedbacks:
         if fb["id"] == fb_id:
             feedbacks.remove(fb)
@@ -558,10 +589,14 @@ async def admin_del_feedback(callback: CallbackQuery):
 @dp.callback_query(F.data.startswith("admin|del_work|"))
 async def admin_del_work(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id not in ADMINS:
+    if not _is_admin(user_id):
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    wk_id = int(callback.data.split("|")[-1])
+    try:
+        wk_id = int(callback.data.split("|")[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Noto‘g‘ri ma‘lumot.", show_alert=True)
+        return
     for wk in works:
         if wk["id"] == wk_id:
             works.remove(wk)
@@ -577,10 +612,14 @@ async def admin_del_work(callback: CallbackQuery):
 @dp.callback_query(F.data.startswith("admin|grade_work|"))
 async def admin_grade_work(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id not in ADMINS:
+    if not _is_admin(user_id):
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    wk_id = int(callback.data.split("|")[-1])
+    try:
+        wk_id = int(callback.data.split("|")[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Noto‘g‘ri ma‘lumot.", show_alert=True)
+        return
     pending_actions[user_id] = {"action": "grade_work", "work_id": wk_id}
     await callback.message.answer(
         f"✍️ Work #{wk_id} uchun bahoni yuboring (masalan: 85 yoki A):",
@@ -592,10 +631,14 @@ async def admin_grade_work(callback: CallbackQuery):
 @dp.callback_query(F.data.startswith("admin|grade_feedback|"))
 async def admin_grade_feedback(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if user_id not in ADMINS:
+    if not _is_admin(user_id):
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    fb_id = int(callback.data.split("|")[-1])
+    try:
+        fb_id = int(callback.data.split("|")[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Noto‘g‘ri ma‘lumot.", show_alert=True)
+        return
     pending_actions[user_id] = {"action": "grade_feedback", "feedback_id": fb_id}
     await callback.message.answer(
         f"✍️ Feedback #{fb_id} uchun bahoni yuboring (masalan: 5/5 yoki A):",
@@ -620,8 +663,8 @@ async def handle_all_messages(message: types.Message):
         a = action.get("action")
 
         # --- Broadcast ---
-        if a == "broadcast" and user_id in ADMINS:
-            text = message.text or ""
+        if a == "broadcast" and _is_admin(user_id):
+            text = (message.text or "")[:MAX_INPUT_LENGTH]
             if not text:
                 await message.answer("❌ Iltimos matn yuboring.")
                 return
@@ -634,14 +677,14 @@ async def handle_all_messages(message: types.Message):
                     )
                     count += 1
                 except Exception:
-                    pass
+                    logger.debug("Failed to send broadcast to user %s", uid)
             await message.answer(f"📤 Eslatma yuborildi: {count} foydalanuvchiga.")
             log(f"admin {user_id} broadcast to {count} users")
             pending_actions.pop(user_id, None)
             return
 
         # --- Work baholash ---
-        if a == "grade_work" and user_id in ADMINS:
+        if a == "grade_work" and _is_admin(user_id):
             score = (message.text or "").strip()
             wk_id = action["work_id"]
             for wk in works:
@@ -654,7 +697,7 @@ async def handle_all_messages(message: types.Message):
             return
 
         # --- Feedback baholash ---
-        if a == "grade_feedback" and user_id in ADMINS:
+        if a == "grade_feedback" and _is_admin(user_id):
             score = (message.text or "").strip()
             fb_id = action["feedback_id"]
             for fb in feedbacks:
@@ -670,12 +713,17 @@ async def handle_all_messages(message: types.Message):
         if a == "feedback":
             global _next_feedback_id
             student_name = action["student"]
+            if len(feedbacks) >= MAX_FEEDBACKS:
+                await message.answer("❌ Fikrlar limiti tugadi. Admin bilan bog‘laning.")
+                pending_actions.pop(user_id, None)
+                return
             if message.text:
+                content = message.text[:MAX_INPUT_LENGTH]
                 fb = {
                     "id": _next_feedback_id,
                     "student": student_name,
                     "type": "text",
-                    "content": message.text,
+                    "content": content,
                     "file_id": None,
                     "from_user_id": user_id,
                     "timestamp": datetime.now().isoformat(),
@@ -696,6 +744,10 @@ async def handle_all_messages(message: types.Message):
         if a == "work":
             global _next_work_id
             student_name = action["student"]
+            if len(works) >= MAX_WORKS:
+                await message.answer("❌ Ishlar limiti tugadi. Admin bilan bog‘laning.")
+                pending_actions.pop(user_id, None)
+                return
             wk = {
                 "id": _next_work_id,
                 "student": student_name,
@@ -709,7 +761,7 @@ async def handle_all_messages(message: types.Message):
 
             if message.text:
                 wk["type"] = "text"
-                wk["content"] = message.text
+                wk["content"] = message.text[:MAX_INPUT_LENGTH]
                 works.append(wk)
                 _next_work_id += 1
                 await message.answer("✅ Ish (text/link) qabul qilindi. Rahmat!")
