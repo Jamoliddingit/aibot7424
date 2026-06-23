@@ -14,11 +14,11 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQu
 
 # ================== CONFIG ==================
 # Render’da TOKEN env var bo‘ladi
-TOKEN = os.getenv("TOKEN", "YOUR_BOT_TOKEN_HERE")
+TOKEN = os.getenv("TOKEN", "8053932725:AAFkA02FNOf8Dzo2nvbDt0heKfQEZw5ttG4")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-ADMINS = [327276782, 7998617969]  # Admin Telegram ID larini shu yerga yoz
+ADMINS = [8460082783]  # Admin Telegram ID larini shu yerga yoz
 
 # ================== FASTAPI HEALTH CHECK ==================
 
