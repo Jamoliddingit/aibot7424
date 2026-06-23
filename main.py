@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import os
 import csv
 import io
+import sys
 from datetime import datetime
 import threading
 
@@ -12,9 +14,15 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
+logger = logging.getLogger(__name__)
+
 # ================== CONFIG ==================
 # Render’da TOKEN env var bo‘ladi
 TOKEN = os.getenv("TOKEN", "8053932725:AAFkA02FNOf8Dzo2nvbDt0heKfQEZw5ttG4")
+if not TOKEN:
+    logger.critical("TOKEN environment variable is not set. Exiting.")
+    sys.exit(1)
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
@@ -46,7 +54,12 @@ def start_web():
     FastAPI serverni alohida thread’da ishga tushiramiz.
     Render 'PORT' env var beradi, bo‘lmasa 10000 ni olamiz.
     """
-    port = int(os.getenv("PORT", 10000))
+    raw_port = os.getenv("PORT", "10000")
+    try:
+        port = int(raw_port)
+    except ValueError:
+        logger.error("Invalid PORT value '%s', falling back to 10000", raw_port)
+        port = 10000
     uvicorn.run(app, host="0.0.0.0", port=port)
 
 # ================== DATA STORES ==================
@@ -227,7 +240,12 @@ async def student_page(callback: CallbackQuery):
 # Fikr / Ish flow boshlash
 @dp.callback_query(F.data.startswith("action|"))
 async def start_action(callback: CallbackQuery):
-    _, action, name = callback.data.split("|", 2)
+    parts = callback.data.split("|", 2)
+    if len(parts) < 3:
+        logger.warning("Malformed action callback data: %s", callback.data)
+        await callback.answer("Xatolik: noto\u2018g\u2018ri ma\u2018lumot.", show_alert=True)
+        return
+    _, action, name = parts
     user_id = callback.from_user.id
 
     if action == "feedback":
@@ -349,37 +367,47 @@ async def admin_actions(callback: CallbackQuery):
                         ],
                     ]
                 )
-                if fb["type"] == "text":
+                try:
+                    if fb["type"] == "text":
+                        await callback.message.answer(
+                            f"#{fb['id']}  {fb['student']}:\n{fb['content']}",
+                            reply_markup=kb,
+                        )
+                    elif fb["type"] == "photo":
+                        await bot.send_photo(
+                            user_id,
+                            fb["file_id"],
+                            caption=f"#{fb['id']} {fb['student']} yuborgan rasm",
+                        )
+                        await callback.message.answer(
+                            f"#{fb['id']}  {fb['student']}", reply_markup=kb
+                        )
+                    elif fb["type"] == "video":
+                        await bot.send_video(
+                            user_id,
+                            fb["file_id"],
+                            caption=f"#{fb['id']} {fb['student']} yuborgan video",
+                        )
+                        await callback.message.answer(
+                            f"#{fb['id']}  {fb['student']}", reply_markup=kb
+                        )
+                    elif fb["type"] == "document":
+                        await bot.send_document(
+                            user_id,
+                            fb["file_id"],
+                            caption=f"#{fb['id']} {fb['student']} yuborgan fayl",
+                        )
+                        await callback.message.answer(
+                            f"#{fb['id']}  {fb['student']}", reply_markup=kb
+                        )
+                except Exception:
+                    logger.error(
+                        "Failed to send feedback #%s to admin %s",
+                        fb["id"], user_id, exc_info=True,
+                    )
                     await callback.message.answer(
-                        f"#{fb['id']}  {fb['student']}:\n{fb['content']}",
+                        f"⚠️ Feedback #{fb['id']} yuborishda xatolik.",
                         reply_markup=kb,
-                    )
-                elif fb["type"] == "photo":
-                    await bot.send_photo(
-                        user_id,
-                        fb["file_id"],
-                        caption=f"#{fb['id']} {fb['student']} yuborgan rasm",
-                    )
-                    await callback.message.answer(
-                        f"#{fb['id']}  {fb['student']}", reply_markup=kb
-                    )
-                elif fb["type"] == "video":
-                    await bot.send_video(
-                        user_id,
-                        fb["file_id"],
-                        caption=f"#{fb['id']} {fb['student']} yuborgan video",
-                    )
-                    await callback.message.answer(
-                        f"#{fb['id']}  {fb['student']}", reply_markup=kb
-                    )
-                elif fb["type"] == "document":
-                    await bot.send_document(
-                        user_id,
-                        fb["file_id"],
-                        caption=f"#{fb['id']} {fb['student']} yuborgan fayl",
-                    )
-                    await callback.message.answer(
-                        f"#{fb['id']}  {fb['student']}", reply_markup=kb
                     )
 
     # ----- Ishlar -----
@@ -407,37 +435,47 @@ async def admin_actions(callback: CallbackQuery):
                         ],
                     ]
                 )
-                if wk["type"] == "text":
+                try:
+                    if wk["type"] == "text":
+                        await callback.message.answer(
+                            f"#{wk['id']}  {wk['student']}:\n{wk['content']}",
+                            reply_markup=kb,
+                        )
+                    elif wk["type"] == "photo":
+                        await bot.send_photo(
+                            user_id,
+                            wk["file_id"],
+                            caption=f"#{wk['id']} {wk['student']} yuborgan rasm",
+                        )
+                        await callback.message.answer(
+                            f"#{wk['id']}  {wk['student']}", reply_markup=kb
+                        )
+                    elif wk["type"] == "video":
+                        await bot.send_video(
+                            user_id,
+                            wk["file_id"],
+                            caption=f"#{wk['id']} {wk['student']} yuborgan video",
+                        )
+                        await callback.message.answer(
+                            f"#{wk['id']}  {wk['student']}", reply_markup=kb
+                        )
+                    elif wk["type"] == "document":
+                        await bot.send_document(
+                            user_id,
+                            wk["file_id"],
+                            caption=f"#{wk['id']} {wk['student']} yuborgan fayl",
+                        )
+                        await callback.message.answer(
+                            f"#{wk['id']}  {wk['student']}", reply_markup=kb
+                        )
+                except Exception:
+                    logger.error(
+                        "Failed to send work #%s to admin %s",
+                        wk["id"], user_id, exc_info=True,
+                    )
                     await callback.message.answer(
-                        f"#{wk['id']}  {wk['student']}:\n{wk['content']}",
+                        f"⚠️ Ish #{wk['id']} yuborishda xatolik.",
                         reply_markup=kb,
-                    )
-                elif wk["type"] == "photo":
-                    await bot.send_photo(
-                        user_id,
-                        wk["file_id"],
-                        caption=f"#{wk['id']} {wk['student']} yuborgan rasm",
-                    )
-                    await callback.message.answer(
-                        f"#{wk['id']}  {wk['student']}", reply_markup=kb
-                    )
-                elif wk["type"] == "video":
-                    await bot.send_video(
-                        user_id,
-                        wk["file_id"],
-                        caption=f"#{wk['id']} {wk['student']} yuborgan video",
-                    )
-                    await callback.message.answer(
-                        f"#{wk['id']}  {wk['student']}", reply_markup=kb
-                    )
-                elif wk["type"] == "document":
-                    await bot.send_document(
-                        user_id,
-                        wk["file_id"],
-                        caption=f"#{wk['id']} {wk['student']} yuborgan fayl",
-                    )
-                    await callback.message.answer(
-                        f"#{wk['id']}  {wk['student']}", reply_markup=kb
                     )
 
     # ----- Statistikalar -----
@@ -457,50 +495,57 @@ async def admin_actions(callback: CallbackQuery):
 
     # ----- Export CSV -----
     elif cmd == "admin|export":
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            [
-                "type",
-                "id",
-                "student",
-                "content_or_fileid",
-                "from_user",
-                "timestamp",
-                "grade",
-            ]
-        )
-        for fb in feedbacks:
+        try:
+            output = io.StringIO()
+            writer = csv.writer(output)
             writer.writerow(
                 [
-                    "feedback",
-                    fb["id"],
-                    fb["student"],
-                    fb.get("content") or fb.get("file_id"),
-                    fb.get("from_user_id"),
-                    fb.get("timestamp"),
-                    fb.get("grade", ""),
+                    "type",
+                    "id",
+                    "student",
+                    "content_or_fileid",
+                    "from_user",
+                    "timestamp",
+                    "grade",
                 ]
             )
-        for wk in works:
-            writer.writerow(
-                [
-                    "work",
-                    wk["id"],
-                    wk["student"],
-                    wk.get("content") or wk.get("file_id"),
-                    wk.get("from_user_id"),
-                    wk.get("timestamp"),
-                    wk.get("grade", ""),
-                ]
+            for fb in feedbacks:
+                writer.writerow(
+                    [
+                        "feedback",
+                        fb["id"],
+                        fb["student"],
+                        fb.get("content") or fb.get("file_id"),
+                        fb.get("from_user_id"),
+                        fb.get("timestamp"),
+                        fb.get("grade", ""),
+                    ]
+                )
+            for wk in works:
+                writer.writerow(
+                    [
+                        "work",
+                        wk["id"],
+                        wk["student"],
+                        wk.get("content") or wk.get("file_id"),
+                        wk.get("from_user_id"),
+                        wk.get("timestamp"),
+                        wk.get("grade", ""),
+                    ]
+                )
+            output.seek(0)
+            await bot.send_document(
+                user_id,
+                (io.BytesIO(output.getvalue().encode()), "export.csv"),
             )
-        output.seek(0)
-        await bot.send_document(
-            user_id,
-            (io.BytesIO(output.getvalue().encode()), "export.csv"),
-        )
-        await callback.answer("📥 Export yuborildi.")
-        log(f"admin {user_id} exported data")
+            await callback.answer("📥 Export yuborildi.")
+            log(f"admin {user_id} exported data")
+        except Exception:
+            logger.error("CSV export failed for admin %s", user_id, exc_info=True)
+            await callback.message.answer(
+                "❌ Export paytida xatolik yuz berdi.",
+                reply_markup=back_to_admin_panel_kb(),
+            )
 
     # ----- Broadcast -----
     elif cmd == "admin|broadcast":
@@ -522,14 +567,21 @@ async def admin_actions(callback: CallbackQuery):
             text = "📜 Logs (oxirgi 100):\n\n" + "\n".join(
                 [f"{t} — {e}" for t, e in logs[-100:]]
             )
-            if len(text) > 4000:
-                await bot.send_document(
-                    user_id,
-                    (io.BytesIO(text.encode()), "logs.txt"),
-                )
-            else:
+            try:
+                if len(text) > 4000:
+                    await bot.send_document(
+                        user_id,
+                        (io.BytesIO(text.encode()), "logs.txt"),
+                    )
+                else:
+                    await callback.message.answer(
+                        text, reply_markup=back_to_admin_panel_kb()
+                    )
+            except Exception:
+                logger.error("Failed to send logs to admin %s", user_id, exc_info=True)
                 await callback.message.answer(
-                    text, reply_markup=back_to_admin_panel_kb()
+                    "❌ Loglarni yuborishda xatolik yuz berdi.",
+                    reply_markup=back_to_admin_panel_kb(),
                 )
 
     await callback.answer()
@@ -542,7 +594,13 @@ async def admin_del_feedback(callback: CallbackQuery):
     if user_id not in ADMINS:
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    fb_id = int(callback.data.split("|")[-1])
+    try:
+        fb_id = int(callback.data.split("|")[-1])
+    except ValueError:
+        logger.warning("Invalid feedback id in callback: %s", callback.data)
+        await callback.answer("Xatolik: noto‘g‘ri ID.", show_alert=True)
+        return
+    found = False
     for fb in feedbacks:
         if fb["id"] == fb_id:
             feedbacks.remove(fb)
@@ -551,7 +609,13 @@ async def admin_del_feedback(callback: CallbackQuery):
                 reply_markup=back_to_admin_panel_kb(),
             )
             log(f"admin {user_id} deleted feedback {fb_id}")
+            found = True
             break
+    if not found:
+        await callback.message.answer(
+            f"⚠️ Feedback #{fb_id} topilmadi.",
+            reply_markup=back_to_admin_panel_kb(),
+        )
     await callback.answer()
 
 
@@ -561,7 +625,13 @@ async def admin_del_work(callback: CallbackQuery):
     if user_id not in ADMINS:
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    wk_id = int(callback.data.split("|")[-1])
+    try:
+        wk_id = int(callback.data.split("|")[-1])
+    except ValueError:
+        logger.warning("Invalid work id in callback: %s", callback.data)
+        await callback.answer("Xatolik: noto‘g‘ri ID.", show_alert=True)
+        return
+    found = False
     for wk in works:
         if wk["id"] == wk_id:
             works.remove(wk)
@@ -570,7 +640,13 @@ async def admin_del_work(callback: CallbackQuery):
                 reply_markup=back_to_admin_panel_kb(),
             )
             log(f"admin {user_id} deleted work {wk_id}")
+            found = True
             break
+    if not found:
+        await callback.message.answer(
+            f"⚠️ Ish #{wk_id} topilmadi.",
+            reply_markup=back_to_admin_panel_kb(),
+        )
     await callback.answer()
 
 
@@ -580,7 +656,12 @@ async def admin_grade_work(callback: CallbackQuery):
     if user_id not in ADMINS:
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    wk_id = int(callback.data.split("|")[-1])
+    try:
+        wk_id = int(callback.data.split("|")[-1])
+    except ValueError:
+        logger.warning("Invalid work id in callback: %s", callback.data)
+        await callback.answer("Xatolik: noto‘g‘ri ID.", show_alert=True)
+        return
     pending_actions[user_id] = {"action": "grade_work", "work_id": wk_id}
     await callback.message.answer(
         f"✍️ Work #{wk_id} uchun bahoni yuboring (masalan: 85 yoki A):",
@@ -595,7 +676,12 @@ async def admin_grade_feedback(callback: CallbackQuery):
     if user_id not in ADMINS:
         await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
-    fb_id = int(callback.data.split("|")[-1])
+    try:
+        fb_id = int(callback.data.split("|")[-1])
+    except ValueError:
+        logger.warning("Invalid feedback id in callback: %s", callback.data)
+        await callback.answer("Xatolik: noto‘g‘ri ID.", show_alert=True)
+        return
     pending_actions[user_id] = {"action": "grade_feedback", "feedback_id": fb_id}
     await callback.message.answer(
         f"✍️ Feedback #{fb_id} uchun bahoni yuboring (masalan: 5/5 yoki A):",
@@ -626,6 +712,7 @@ async def handle_all_messages(message: types.Message):
                 await message.answer("❌ Iltimos matn yuboring.")
                 return
             count = 0
+            failed = 0
             for uid in list(registered_user_ids):
                 try:
                     await bot.send_message(
@@ -634,35 +721,59 @@ async def handle_all_messages(message: types.Message):
                     )
                     count += 1
                 except Exception:
-                    pass
-            await message.answer(f"📤 Eslatma yuborildi: {count} foydalanuvchiga.")
-            log(f"admin {user_id} broadcast to {count} users")
+                    failed += 1
+                    logger.warning("Failed to send broadcast to user %s", uid, exc_info=True)
+            result_msg = f"📤 Eslatma yuborildi: {count} foydalanuvchiga."
+            if failed:
+                result_msg += f"\n⚠️ {failed} foydalanuvchiga yuborib bo‘lmadi."
+            await message.answer(result_msg)
+            log(f"admin {user_id} broadcast to {count} users, {failed} failed")
             pending_actions.pop(user_id, None)
             return
 
         # --- Work baholash ---
         if a == "grade_work" and user_id in ADMINS:
             score = (message.text or "").strip()
+            if not score:
+                await message.answer("❌ Iltimos baho matnini yuboring.")
+                return
             wk_id = action["work_id"]
+            found = False
             for wk in works:
                 if wk["id"] == wk_id:
                     wk["grade"] = score
                     await message.answer(f"✅ Work #{wk_id} baholandi: {score}")
                     log(f"admin {user_id} graded work {wk_id} => {score}")
+                    found = True
                     break
+            if not found:
+                await message.answer(
+                    f"⚠️ Work #{wk_id} topilmadi (o‘chirilgan bo‘lishi mumkin).",
+                    reply_markup=back_to_admin_panel_kb(),
+                )
             pending_actions.pop(user_id, None)
             return
 
         # --- Feedback baholash ---
         if a == "grade_feedback" and user_id in ADMINS:
             score = (message.text or "").strip()
+            if not score:
+                await message.answer("❌ Iltimos baho matnini yuboring.")
+                return
             fb_id = action["feedback_id"]
+            found = False
             for fb in feedbacks:
                 if fb["id"] == fb_id:
                     fb["grade"] = score
                     await message.answer(f"✅ Feedback #{fb_id} baholandi: {score}")
                     log(f"admin {user_id} graded feedback {fb_id} => {score}")
+                    found = True
                     break
+            if not found:
+                await message.answer(
+                    f"⚠️ Feedback #{fb_id} topilmadi (o‘chirilgan bo‘lishi mumkin).",
+                    reply_markup=back_to_admin_panel_kb(),
+                )
             pending_actions.pop(user_id, None)
             return
 
@@ -761,13 +872,26 @@ async def handle_all_messages(message: types.Message):
 # ================== RUN BOT ==================
 
 async def main():
-    print("🤖 AIBOT ishga tushmoqda...")
-    await dp.start_polling(bot)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    logger.info("AIBOT ishga tushmoqda...")
+    try:
+        await dp.start_polling(bot)
+    except Exception:
+        logger.critical("Bot polling failed", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":
     # FastAPI serverni alohida thread’da ishga tushiramiz
     threading.Thread(target=start_web, daemon=True).start()
     # Aiogram pollingni asosiy event loop’da ishlatamiz
-    asyncio.run(main())
-
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception:
+        logger.critical("Unexpected error at startup", exc_info=True)
+        sys.exit(1)
